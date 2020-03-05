@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Youtube Caption Searcher</title>
+        <meta charset="utf-8" />
+        <meta name="author" content="Isaiah Grief" />
+        <meta name="description" content="Web program that uses video quotes to find youtube video urls" />
+        <meta name="keywords" content="youtube, captions, subtitles, quotes, url, find, search" />
+        <script src="CaptionSearcher.js" type="text/javascript"></script>
+        <link href="CaptionSearcher.css" type="text/css" rel="stylesheet" />
+    </head>
+
+    <body>
+        <div>
+            <noscript>
+                <p>
+                    Warning! This page requires JavaScript. Please enable JavaScript or use another browser.
+                </p>
+            </noscript>
+        </div>
+
+        <div>
+            <h1>Caption Searcher</h1>
+            <p>Hey there! Have you ever remembered a quote from your favorite prolific youtuber and 
+                couldn't remember which video it came from? <br />This website will help you 
+                find the video!
+            </p>
+        </div>
+        <div>
+            <h2>Youtube Channel Name</h2>
+            <form onsubmit="updateChannel()">
+                Enter channel name: <input type="text">
+                <input type="submit">
+            </form>
+        </div>
+        <div>
+            <h2>Caption</h2>
+            <form onsubmit="submitQuote()">
+                Enter quote: <input type="text" size="40">
+                <input type="submit">
+            </form>
+        </div>
+        <div>
+            <h3>Results</h3>
+            <dl id="resultsList">
+                <dt>url</dt>
+                <dd>expanded caption</dd>
+            </dl>
+        </div>
+    </body>
+</html>
