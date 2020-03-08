@@ -28,20 +28,23 @@
         </div>
         <div>
             <h2>Youtube Channel Name</h2>
-            <form onsubmit="updateChannel()">
-                Enter channel name: <input type="text">
+            <form id="channelForm">
+                Enter channel name: <input type="text" id="channelText">
                 <input type="submit">
             </form>
         </div>
         <div>
             <h2>Caption</h2>
-            <form onsubmit="submitQuote()">
-                Enter quote: <input type="text" size="40">
+            <form id="captionForm">
+                Enter quote: <input type="text" size="40" id="quoteText">
                 <input type="submit">
             </form>
         </div>
         <div>
             <h3>Results</h3>
+            <p id="debug">
+
+            </p>
             <dl id="resultsList">
                 <dt>url</dt>
                 <dd>expanded caption</dd>
