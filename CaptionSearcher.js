@@ -1,7 +1,16 @@
+/*
+Copyright 2020, Isaiah Grief, All rights reserved.
+
+This program uses the Youtube Data API to gather data about Youtube channels and videos.
+Users input a channel name and then enter a quote from a video on that channel,
+this program will return a list of video titles and links for which the closed captioning contained
+the user's inputted quote. 
+*/
 
 var apiKey = 'AIzaSyAOXoWi4Klu7Lw3-Acqkoovr_qkC0EoU0U';
 var videoIdToCaptions = new Map(); //map from videoId to caption string
 var channelId;
+var videoIdToName = new Map();
 
 
 
@@ -9,6 +18,10 @@ window.onload = function(){
     document.getElementById("channelForm").onsubmit = updateChannel;  
     document.getElementById("captionForm").onsubmit = submitQuote;
 }
+
+
+
+
 
 
 function updateChannel(){
@@ -21,14 +34,13 @@ function updateChannel(){
         alert("Channel name not set");
     }
     
-    return false; //this is currently necessary because submitting the form refreshes the page 
-    //which messes everything up! apparently we shouldn't need a form - 
-    //maybe something else would be better? 
+    return false; //don't submit, don't refresh page
 }
 
 function submitQuote(){
     var quote = document.getElementById("quoteText").value;
     if(quote){
+        document.getElementById("resultsList").innerHTML = "Processing results..."; //clear all nodes to make room for new query
         document.getElementById("captionInputText").innerHTML = quote;
         quote = quote.toLowerCase();
         var videoIds = Array.from(videoIdToCaptions.keys());
@@ -42,7 +54,7 @@ function submitQuote(){
         matches = matches.filter(id => matchMap.get(id)); //all the videoIds that returned TRUE
         console.log(matches);
         //document.getElementById("debug").innerHTML = matches;
-        
+        document.getElementById("resultsList").innerHTML = ""; //clear feedback string 
         findVideoDetails(matches);
 
     } else{
@@ -52,26 +64,24 @@ function submitQuote(){
 }
 
 async function findVideoDetails(matches){
-    var nameToId = new Map();
-    const anAsyncFunction = async videoId => {
+    const storeName = async videoId => {
         var name = await getVideoName(videoId);
-        nameToId.set(name, videoId);
-        return name;
+        videoIdToName.set(videoId, name);
     }
     const getData = async () => {
-        return Promise.all(matches.map(item => anAsyncFunction(item)))
+        return Promise.all(matches.forEach(videoId => storeName(videoId))); //stores name in map for each videoId
     }
     getData().then(data => {
-        data.forEach(name => {
+        data.forEach(videoId => {
             var term = document.createElement("dt");
-            term.appendChild(document.createTextNode(name));
+            term.appendChild(document.createTextNode(videoIdToName.get()));
             document.getElementById("resultsList").appendChild(term);
 
 
             var a = document.createElement("a");
             var description = document.createElement("dd");
 
-            var link = `https://www.youtube.com/watch?v=${nameToId.get(name)}`;
+            var link = `https://www.youtube.com/watch?v=${videoId}`;
             a.textContent = link;
             a.setAttribute('href', link);
             description.appendChild(a);
@@ -84,6 +94,9 @@ async function getVideoName(videoId){
     if(!videoId){
         console.log(`Video ID invalid`);
         return;
+    } else if(videoIdToName.get(videoId) !== ""){
+        console.log(`Video name already found`);
+        return videoIdToName.get(videoId);
     }
     console.log(`Attempting to fetch video details...`);
     try{
@@ -97,7 +110,7 @@ async function getVideoName(videoId){
                 console.log(jsonResponse.items[0].snippet.title);
                 return jsonResponse.items[0].snippet.title;
             }
-return jsonResponse.title;
+            return jsonResponse.title;
         } else{
             throw new Error('Request Failed!');
         }
@@ -127,6 +140,7 @@ async function getChannels(channelName){
                 //we can change this to allow users to select from the list of channels
                 channelId = jsonResponse.items[0].snippet.channelId;
                 console.log(`Channel ID = ${channelId}`);
+                getPlaylistId(); //now fetch everything else 
             }
             //if it is not valid (no channels), then it returns {"items":[]}
         } else{
@@ -136,20 +150,17 @@ async function getChannels(channelName){
     catch (error) {
         alert(error);
     }
-    
-    getCaptions(); //now fetch everything else 
 }
 
 
-//this function will grab all captions for every video in the stored channel
-async function getCaptions(){
+//this function will grab playlist id
+async function getPlaylistId(){
     if(!channelId){
         console.log(`Invalid channel ID`);
         return;
     }
 
     console.log(`Attempting to fetch playlistId of uploads...`);
-    var playlistId;
     try{ //store the playlistId full of uploads
         const response = await fetch(`https://www.googleapis.com/youtube/v3/channels?id=${channelId}&key=${apiKey}&part=contentDetails`);
         console.log(`Done waiting for response`);
@@ -160,8 +171,9 @@ async function getCaptions(){
                 alert("No playlists found");
                 return;
             } else{
-                playlistId = jsonResponse.items[0].contentDetails.relatedPlaylists.uploads;
+                var playlistId = jsonResponse.items[0].contentDetails.relatedPlaylists.uploads;
                 console.log(`Playlist ID = ${playlistId}`);
+                getVideoIds(playlistId);
             }
         } else{
             throw new Error('Request Failed!');
@@ -170,8 +182,10 @@ async function getCaptions(){
     catch (error) {
         alert(error);
     }
+}
 
-
+//get all videoIds 
+async function getVideoIds() {
     var pageToken = "";
     console.log(`Attempting to fetch videoIds of uploads...`);
     while(true){ //we will break out once we have all the videos - need loop for pageTokens
@@ -181,7 +195,6 @@ async function getCaptions(){
             console.log(`Done waiting for response`);
             if(response.ok){
                 const jsonResponse = await response.json();
-
                 if(jsonResponse.items.length <= 0){
                     break;
                 } else{ //store videoIds
@@ -204,24 +217,28 @@ async function getCaptions(){
             alert(error);
         }
     } //end of getting videoIds
+
+    getCaptions();
+}
     
-
-    videoIdToCaptions.forEach((value, key, videoIdToCaptions) => console.log(`value = ${value}, key=${key}`));
-
+//grab all captions for every video in the stored channel
+async function getCaptions(){
     var videoIds = Array.from(videoIdToCaptions.keys());
     console.log(videoIds);
     console.log(`Attempting to fetch captions for each videoId asynchronously...`);
     //get captions
     var asyncCaptionFx = videoIds.map(elem => async () => {
         //get the caption and put it in the map
+        console.log(`creating async function for ${elem}`);
         videoIdToCaptions.set(elem, await getData(`http://video.google.com/timedtext?lang=en&v=${elem}`));
     });
-    var asyncCaptionFx = asyncCaptionFx.map(fx => fx()); 
+    var asyncCaptionFx = asyncCaptionFx.map(fx => fx()); //start the functions
 
-    await Promise.all(asyncCaptionFx); 
+    await Promise.all(asyncCaptionFx); //wait for all promises to be fulfilled
     console.log(`Done fetching all captions`);
-    videoIdToCaptions.forEach((value, key, videoIdToCaptions) => console.log(`value = ${value}, key=${key}`));
+    videoIdToCaptions.forEach((value, key, videoIdToCaptions) => console.log(`value = ${value}, key=${key}`)); //log all pairs
 }
+
 
 //should return the captions as a string
 async function getData(url){
