@@ -21,6 +21,12 @@ window.onload = function(){
 
 
 
+function getTestData(){
+    channelId = UCsvn_Po0SmunchJYOWpOxMg; //dunkey
+    videoIdToCaptions.set("c66IR3qA5-w", "");  //pikachu video
+
+    //now you just need to get the captions with getCaptions()
+}
 
 
 
@@ -90,6 +96,40 @@ async function findVideoDetails(matches){
     });
 }
 
+
+
+async function fetchJSONResponse(url){
+    try{
+        const response = await fetch(url);
+        console.log(`Done waiting for response`);
+        if(response.ok){
+            let jsonResponse = await response.json();
+            return jsonResponse;
+        } else{
+            throw new Error('Request Failed!');
+        }
+    }
+    catch (error) {
+        alert(error);
+    }
+}
+
+async function fetchXMLResponse(url){    
+    try{
+        const response = await fetch(url);
+        console.log(`Done waiting for response`);
+        if(response.ok){
+            const xmlResponse = await response.text();
+            let parser = new DOMParser();
+            return parser.parseFromString(xmlResponse, "text/xml");
+        }
+        throw new Error('Request Failed!');
+    }
+    catch (error) {
+        alert(error);
+    }
+}
+
 async function getVideoName(videoId){
     if(!videoId){
         console.log(`Video ID invalid`);
@@ -99,21 +139,16 @@ async function getVideoName(videoId){
         return videoIdToName.get(videoId);
     }
     console.log(`Attempting to fetch video details...`);
+    const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${apiKey}`);
+
     try{
-        const response = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${apiKey}`);
-        console.log(`Done waiting for response`);
-        if(response.ok){
-            const jsonResponse = await response.json();
-            //document.getElementById("debug").innerHTML = JSON.stringify(jsonResponse);
-            //console.log(JSON.stringify(jsonResponse));
-            if(jsonResponse.items.length > 0){
-                console.log(jsonResponse.items[0].snippet.title);
-                return jsonResponse.items[0].snippet.title;
-            }
-            return jsonResponse.title;
-        } else{
-            throw new Error('Request Failed!');
+        //document.getElementById("debug").innerHTML = JSON.stringify(jsonResponse);
+        //console.log(JSON.stringify(jsonResponse));
+        if(jsonResponse.items.length > 0){
+            console.log(jsonResponse.items[0].snippet.title);
+            return jsonResponse.items[0].snippet.title;
         }
+        return jsonResponse.title;
     }
     catch (error) {
         alert(error);
@@ -127,31 +162,30 @@ async function getChannels(channelName){
         return;
     }
     console.log(`Attempting to fetch channel ID...`);
+    const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${channelName}&type=channel&fields=items%2Fsnippet%2FchannelId&key=${apiKey}`);
     try{
-        const response = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${channelName}&type=channel&fields=items%2Fsnippet%2FchannelId&key=${apiKey}`);
-        console.log(`Done waiting for response`);
-        if(response.ok){
-            const jsonResponse = await response.json();
-            //document.getElementById("debug").innerHTML = JSON.stringify(jsonResponse);
-            if(jsonResponse.items.length <= 0){
-                alert("No channels found");
-                return;
-            } else{
-                //we can change this to allow users to select from the list of channels
-                channelId = jsonResponse.items[0].snippet.channelId;
-                console.log(`Channel ID = ${channelId}`);
-                getPlaylistId(); //now fetch everything else 
-            }
-            //if it is not valid (no channels), then it returns {"items":[]}
+        //document.getElementById("debug").innerHTML = JSON.stringify(jsonResponse);
+        if(jsonResponse.items.length <= 0){
+            alert("No channels found");
+            return;
         } else{
-            throw new Error('Request Failed!');
+            //we can change this to allow users to select from the list of channels
+            channelId = jsonResponse.items[0].snippet.channelId;
+            console.log(`Channel ID = ${channelId}`);
+            getPlaylistId(); //now fetch everything else 
         }
+        //if it is not valid (no channels), then it returns {"items":[]}
     }
     catch (error) {
         alert(error);
     }
 }
 
+function jsonHasItems(jsonResponse){
+    if(jsonResponse.items.length > 0){
+        return true;
+    }
+}
 
 //this function will grab playlist id
 async function getPlaylistId(){
@@ -159,24 +193,17 @@ async function getPlaylistId(){
         console.log(`Invalid channel ID`);
         return;
     }
-
     console.log(`Attempting to fetch playlistId of uploads...`);
+    const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/channels?id=${channelId}&key=${apiKey}&part=contentDetails`);
     try{ //store the playlistId full of uploads
-        const response = await fetch(`https://www.googleapis.com/youtube/v3/channels?id=${channelId}&key=${apiKey}&part=contentDetails`);
-        console.log(`Done waiting for response`);
-        if(response.ok){
-            const jsonResponse = await response.json();
-            //document.getElementById("debug").innerHTML = JSON.stringify(jsonResponse);
-            if(jsonResponse.items.length <= 0){
-                alert("No playlists found");
-                return;
-            } else{
-                var playlistId = jsonResponse.items[0].contentDetails.relatedPlaylists.uploads;
-                console.log(`Playlist ID = ${playlistId}`);
-                getVideoIds(playlistId);
-            }
+        document.getElementById("debug").innerHTML = JSON.stringify(jsonResponse);
+        if(jsonResponse.items.length <= 0){
+            alert("No playlists found");
+            return;
         } else{
-            throw new Error('Request Failed!');
+            var playlistId = jsonResponse.items[0].contentDetails.relatedPlaylists.uploads;
+            console.log(`Playlist ID = ${playlistId}`);
+            getVideoIds(playlistId);
         }
     }
     catch (error) {
@@ -185,32 +212,26 @@ async function getPlaylistId(){
 }
 
 //get all videoIds 
-async function getVideoIds() {
+async function getVideoIds(playlistId) {
     var pageToken = "";
     console.log(`Attempting to fetch videoIds of uploads...`);
     while(true){ //we will break out once we have all the videos - need loop for pageTokens
         console.log(`Iterating for page token =${pageToken}`);
+        const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&maxResults=50${pageToken}&playlistId=${playlistId}&key=${apiKey}`);
         try{ //store all videoIds (put it in the map, map it to "");
-            const response = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&maxResults=50${pageToken}&playlistId=${playlistId}&key=${apiKey}`);
-            console.log(`Done waiting for response`);
-            if(response.ok){
-                const jsonResponse = await response.json();
-                if(jsonResponse.items.length <= 0){
+            if(jsonResponse.items.length <= 0){
+                break;
+            } else{ //store videoIds
+                jsonResponse.items.forEach(element => videoIdToCaptions.set(element.contentDetails.videoId, ""));
+                
+                //get next page token
+                var nextPageToken = jsonResponse.nextPageToken;
+                console.log(`next page token = ${nextPageToken}`);
+                if(nextPageToken){
+                    pageToken = `&pageToken=${nextPageToken}`;
+                } else{
                     break;
-                } else{ //store videoIds
-                    jsonResponse.items.forEach(element => videoIdToCaptions.set(element.contentDetails.videoId, ""));
-                    
-                    //get next page token
-                    var nextPageToken = jsonResponse.nextPageToken;
-                    console.log(`next page token = ${nextPageToken}`);
-                    if(nextPageToken){
-                        pageToken = `&pageToken=${nextPageToken}`;
-                    } else{
-                        break;
-                    }
                 }
-            } else{
-                throw new Error('Request Failed!');
             }
         }
         catch (error) {
@@ -230,7 +251,7 @@ async function getCaptions(){
     var asyncCaptionFx = videoIds.map(elem => async () => {
         //get the caption and put it in the map
         console.log(`creating async function for ${elem}`);
-        videoIdToCaptions.set(elem, await getData(`http://video.google.com/timedtext?lang=en&v=${elem}`));
+        videoIdToCaptions.set(elem, await getCaptionFromURL(`http://video.google.com/timedtext?lang=en&v=${elem}`));
     });
     var asyncCaptionFx = asyncCaptionFx.map(fx => fx()); //start the functions
 
@@ -241,27 +262,20 @@ async function getCaptions(){
 
 
 //should return the captions as a string
-async function getData(url){
+async function getCaptionFromURL(url){
     console.log(`Attempting to fetch captions at ${url}...`);
     try{
-        const response = await fetch(url);
-        console.log(`Done waiting for response`);
-        if(response.ok){
-            const xmlResponse = await response.text();
-            let parser = new DOMParser();
-            let xmlDoc = parser.parseFromString(xmlResponse, "text/xml");
-            //everything is in a <text> tag 
-            let textList = xmlDoc.getElementsByTagName("text");
-            let text = "";
-            for(let i = 0; i < textList.length; i++){
-                text += textList[i].childNodes[0].nodeValue + " ";
-            }
-            //note: text will be stored along with special characters like &#39; 
-            //      input text will need to keep this in mind
-            console.log(`Text is ${text.length} characters`);
-            return text.toLowerCase();
+        const xmlDoc = await fetchXMLResponse(url);
+        //everything is in a <text> tag 
+        let textList = xmlDoc.getElementsByTagName("text");
+        let text = "";
+        for(let i = 0; i < textList.length; i++){
+            text += textList[i].childNodes[0].nodeValue + " ";
         }
-        throw new Error('Request Failed!');
+        //note: text will be stored along with special characters like &#39; 
+        //      input text will need to keep this in mind
+        console.log(`Text is ${text.length} characters`);
+        return text.toLowerCase();
     }
     catch (error) {
         alert(error);
