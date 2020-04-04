@@ -11,21 +11,54 @@ var apiKey = 'AIzaSyAOXoWi4Klu7Lw3-Acqkoovr_qkC0EoU0U';
 var videoIdToCaptions = new Map(); //map from videoId to caption string
 var channelId;
 var videoIdToName = new Map();
+var videoIdToMatchIdx = new Map();
 
 
 
 window.onload = function(){
-    document.getElementById("channelForm").onsubmit = updateChannel;  
-    document.getElementById("captionForm").onsubmit = submitQuote;
+    //document.getElementById("channelForm").onsubmit = updateChannel;  
+    //document.getElementById("captionForm").onsubmit = submitQuote;
+    document.getElementById("channelForm").onsubmit = getTestData;
+    document.getElementById("captionForm").onsubmit = testSubmit;
 }
 
+function testSubmit(){
 
+    var quote = "watch out";
+
+
+    var videoIds = Array.from(videoIdToCaptions.keys());
+    var matchMap = new Map();
+    videoIds.forEach(id => {
+        matchMap.set(id, boyerMoore(quote, videoIdToCaptions.get(id), id));
+    });
+    var matches = Array.from(matchMap.keys());
+    matches = matches.filter(id => matchMap.get(id)); //all the videoIds that returned TRUE
+
+    findVideoDetails(matches);
+    
+    console.log("end of shit");
+    videoIdToMatchIdx.forEach(obj => { 
+        console.log(obj);
+    });
+    console.log(videoIdToMatchIdx);
+    
+    return false;
+}
 
 function getTestData(){
-    channelId = UCsvn_Po0SmunchJYOWpOxMg; //dunkey
+    channelId = "UCsvn_Po0SmunchJYOWpOxMg"; //dunkey
     videoIdToCaptions.set("c66IR3qA5-w", "");  //pikachu video
-
     //now you just need to get the captions with getCaptions()
+
+    videoIdToCaptions.set("Npxw4Y7w9RE", "");
+    videoIdToCaptions.set("fcN7RP723eM", ""); 
+
+
+    getCaptions();
+
+
+    return false;
 }
 
 
@@ -53,7 +86,7 @@ function submitQuote(){
         console.log(`Attempting to pattern match ${quote}...`);
         var matchMap = new Map();
         videoIds.forEach(id => {
-            matchMap.set(id, boyerMoore(quote, videoIdToCaptions.get(id)));
+            matchMap.set(id, boyerMoore(quote, videoIdToCaptions.get(id), id));
         })
         console.log(`Done pattern matching`);
         var matches = Array.from(matchMap.keys());
@@ -71,16 +104,25 @@ function submitQuote(){
 
 async function findVideoDetails(matches){
     const storeName = async videoId => {
-        var name = await getVideoName(videoId);
-        videoIdToName.set(videoId, name);
+        console.log(videoIdToName);
+        return new Promise(resolve => {
+            var name = getVideoName(videoId);
+            resolve(name);
+        }).then(name => {
+            videoIdToName.set(videoId, name);
+            return videoId;
+        });
     }
-    const getData = async () => {
-        return Promise.all(matches.forEach(videoId => storeName(videoId))); //stores name in map for each videoId
-    }
-    getData().then(data => {
-        data.forEach(videoId => {
+
+    var matchFunctions = matches.map(storeName);
+    var results = Promise.all(matchFunctions);
+    results.then(videoIds => {
+        console.log(videoIds);
+        videoIds.forEach(videoId => {
+            console.log(`Adding link to video ${videoId}`);
             var term = document.createElement("dt");
-            term.appendChild(document.createTextNode(videoIdToName.get()));
+            term.appendChild(document.createTextNode(videoIdToName.get(videoId)));
+            console.log(`The name for ${videoId} is ${videoIdToName.get(videoId)}`)
             document.getElementById("resultsList").appendChild(term);
 
 
@@ -91,7 +133,34 @@ async function findVideoDetails(matches){
             a.textContent = link;
             a.setAttribute('href', link);
             description.appendChild(a);
+
+
+            var obj = videoIdToMatchIdx.get(videoId);
+            var leftIdx = obj.left;
+            var rightIdx = obj.right;
+            var boldLeftIdx = obj.boldLeft;
+            var boldRightIdx = obj.boldRight;
+            var lastIdx = obj.lastIdx;
+            
+            var caption = videoIdToCaptions.get(videoId);
+            var leftQuote = caption.substring(leftIdx, boldLeftIdx);
+            if(leftIdx !== 0){
+                leftQuote = "..." + leftQuote;
+            }
+            var quote = caption.substring(boldLeftIdx, boldRightIdx + 1);
+            var rightQuote = caption.substring(boldRightIdx+1,rightIdx);
+            if(rightIdx !== lastIdx){
+                rightQuote = rightQuote + "...";
+            }
+
+            var whatTheFuck = caption.substring(leftIdx, rightIdx);
+            console.log(whatTheFuck);
+            var captionResult = document.createElement("dd");
+            captionResult.innerHTML = leftQuote + quote.bold() + rightQuote;
+
+
             document.getElementById("resultsList").appendChild(description);
+            document.getElementById("resultsList").appendChild(captionResult);
         })
     });
 }
@@ -134,7 +203,7 @@ async function getVideoName(videoId){
     if(!videoId){
         console.log(`Video ID invalid`);
         return;
-    } else if(videoIdToName.get(videoId) !== ""){
+    } else if(videoIdToName.get(videoId)){
         console.log(`Video name already found`);
         return videoIdToName.get(videoId);
     }
@@ -284,7 +353,7 @@ async function getCaptionFromURL(url){
 
   
 //function returns true if there is a match, false if no match
-function boyerMoore(pattern, text){
+function boyerMoore(pattern, text, videoId){
     console.log(`Attempting to discover match for pattern ${pattern}`);
     const jumpTable = new Map(); 
     let distance = 1;
@@ -303,6 +372,36 @@ function boyerMoore(pattern, text){
         if(pattern[j] === text[i]){
             if(j === 0){ //matched the full pattern
                 console.log(`Match found!`);
+                var margin = 60;
+                var leftIdx = 0; 
+                var rightIdx = text.length;
+                if(last + margin < text.length){
+                    rightIdx = last + margin;
+                    while(rightIdx < text.length){
+                        if(text[rightIdx] === " "){
+                            break;
+                        }
+                        rightIdx++;
+                    }
+                } 
+                if(last-pattern.length - margin >= 0){
+                    leftIdx = last-pattern.length-margin;
+                    while(leftIdx >= 0){
+                        if(text[leftIdx] === " "){
+                            break;
+                        }
+                        leftIdx--;
+                    }
+                }
+                var boldLeftIdx = last - pattern.length;
+                var boldRightIdx = last;
+                var lastIdx = text.length - 1;
+                console.log(`Adding ${videoId}, ${leftIdx}, ${rightIdx} to map`);
+                videoIdToMatchIdx.set(videoId, {left: leftIdx, 
+                                                right: rightIdx,
+                                                boldLeft: boldLeftIdx,
+                                                boldRight: boldRightIdx,
+                                                lastIdx: lastIdx});
                 return true;
             } else{ //look at the rest of the elements to determine full match
                 i--;
