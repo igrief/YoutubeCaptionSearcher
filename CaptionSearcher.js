@@ -7,60 +7,14 @@ this program will return a list of video titles and links for which the closed c
 the user's inputted quote. 
 */
 
-var apiKey = 'AIzaSyAOXoWi4Klu7Lw3-Acqkoovr_qkC0EoU0U';
-var videoIdToCaptions = new Map(); //map from videoId to caption string
+var videoIdToDetails = new Map(); //name, blurb, time, captions[]
 var channelId;
-var videoIdToName = new Map();
-var videoIdToMatchIdx = new Map();
-
 
 
 window.onload = function(){
-    //document.getElementById("channelForm").onsubmit = updateChannel;  
-    //document.getElementById("captionForm").onsubmit = submitQuote;
-    document.getElementById("channelForm").onsubmit = getTestData;
-    document.getElementById("captionForm").onsubmit = testSubmit;
+    document.getElementById("channelForm").onsubmit = updateChannel;  
+    document.getElementById("captionForm").onsubmit = submitQuote;
 }
-
-function testSubmit(){
-
-    var quote = "watch out";
-
-
-    var videoIds = Array.from(videoIdToCaptions.keys());
-    var matchMap = new Map();
-    videoIds.forEach(id => {
-        matchMap.set(id, boyerMoore(quote, videoIdToCaptions.get(id), id));
-    });
-    var matches = Array.from(matchMap.keys());
-    matches = matches.filter(id => matchMap.get(id)); //all the videoIds that returned TRUE
-
-    findVideoDetails(matches);
-    
-    console.log("end of shit");
-    videoIdToMatchIdx.forEach(obj => { 
-        console.log(obj);
-    });
-    console.log(videoIdToMatchIdx);
-    
-    return false;
-}
-
-function getTestData(){
-    channelId = "UCsvn_Po0SmunchJYOWpOxMg"; //dunkey
-    videoIdToCaptions.set("c66IR3qA5-w", "");  //pikachu video
-    //now you just need to get the captions with getCaptions()
-
-    videoIdToCaptions.set("Npxw4Y7w9RE", "");
-    videoIdToCaptions.set("fcN7RP723eM", ""); 
-
-
-    getCaptions();
-
-
-    return false;
-}
-
 
 
 function updateChannel(){
@@ -82,11 +36,11 @@ function submitQuote(){
         document.getElementById("resultsList").innerHTML = "Processing results..."; //clear all nodes to make room for new query
         document.getElementById("captionInputText").innerHTML = quote;
         quote = quote.toLowerCase();
-        var videoIds = Array.from(videoIdToCaptions.keys());
+        var videoIds = Array.from(videoIdToDetails.keys());
         console.log(`Attempting to pattern match ${quote}...`);
         var matchMap = new Map();
         videoIds.forEach(id => {
-            matchMap.set(id, boyerMoore(quote, videoIdToCaptions.get(id), id));
+            matchMap.set(id, boyerMoore(quote, videoIdToDetails.get(id).captions, id));
         })
         console.log(`Done pattern matching`);
         var matches = Array.from(matchMap.keys());
@@ -94,7 +48,7 @@ function submitQuote(){
         console.log(matches);
         //document.getElementById("debug").innerHTML = matches;
         document.getElementById("resultsList").innerHTML = ""; //clear feedback string 
-        findVideoDetails(matches);
+        findAndPostVideoDetails(matches);
 
     } else{
         alert("Please enter a quote");
@@ -102,14 +56,13 @@ function submitQuote(){
     return false; //again currently necessary to not refresh page 
 }
 
-async function findVideoDetails(matches){
+async function findAndPostVideoDetails(matches){
     const storeName = async videoId => {
-        console.log(videoIdToName);
         return new Promise(resolve => {
             var name = getVideoName(videoId);
             resolve(name);
         }).then(name => {
-            videoIdToName.set(videoId, name);
+            videoIdToDetails.get(videoId).name = name;
             return videoId;
         });
     }
@@ -121,51 +74,25 @@ async function findVideoDetails(matches){
         videoIds.forEach(videoId => {
             console.log(`Adding link to video ${videoId}`);
             var term = document.createElement("dt");
-            term.appendChild(document.createTextNode(videoIdToName.get(videoId)));
-            console.log(`The name for ${videoId} is ${videoIdToName.get(videoId)}`)
+            term.appendChild(document.createTextNode(videoIdToDetails.get(videoId).name));
+            console.log(`The name for ${videoId} is ${videoIdToDetails.get(videoId).name}`)
             document.getElementById("resultsList").appendChild(term);
 
-
-            var a = document.createElement("a");
-            var description = document.createElement("dd");
-
-            var link = `https://www.youtube.com/watch?v=${videoId}`;
-            a.textContent = link;
-            a.setAttribute('href', link);
-            description.appendChild(a);
-
-
-            var obj = videoIdToMatchIdx.get(videoId);
-            var leftIdx = obj.left;
-            var rightIdx = obj.right;
-            var boldLeftIdx = obj.boldLeft;
-            var boldRightIdx = obj.boldRight;
-            var lastIdx = obj.lastIdx;
-            
-            var caption = videoIdToCaptions.get(videoId);
-            var leftQuote = caption.substring(leftIdx, boldLeftIdx);
-            if(leftIdx !== 0){
-                leftQuote = "..." + leftQuote;
-            }
-            var quote = caption.substring(boldLeftIdx, boldRightIdx + 1);
-            var rightQuote = caption.substring(boldRightIdx+1,rightIdx);
-            if(rightIdx !== lastIdx){
-                rightQuote = rightQuote + "...";
-            }
-
-            var whatTheFuck = caption.substring(leftIdx, rightIdx);
-            console.log(whatTheFuck);
             var captionResult = document.createElement("dd");
-            captionResult.innerHTML = leftQuote + quote.bold() + rightQuote;
-
-
-            document.getElementById("resultsList").appendChild(description);
+            var obj = videoIdToDetails.get(videoId).blurb;
+            captionResult.innerHTML = obj.blurb;
             document.getElementById("resultsList").appendChild(captionResult);
+
+            var time = obj.time;
+            //var link = `https://youtube.com/watch?v=${videoId}`;
+            //var link = `https://youtu.be/${videoId}?t=${time}`;
+            var link = `https://www.youtube.com/embed/${videoId}`;
+            var embed = `<iframe width="560" height="315" src="${link}?start=${time}" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+            captionResult.insertAdjacentHTML('beforebegin', embed);
+
         })
     });
 }
-
-
 
 async function fetchJSONResponse(url){
     try{
@@ -175,6 +102,8 @@ async function fetchJSONResponse(url){
             let jsonResponse = await response.json();
             return jsonResponse;
         } else{
+            let jsonResponse = await response.json(); 
+            document.getElementById("debug").innerHTML = JSON.stringify(jsonResponse);
             throw new Error('Request Failed!');
         }
     }
@@ -203,9 +132,9 @@ async function getVideoName(videoId){
     if(!videoId){
         console.log(`Video ID invalid`);
         return;
-    } else if(videoIdToName.get(videoId)){
+    } else if(videoIdToDetails.get(videoId).name){
         console.log(`Video name already found`);
-        return videoIdToName.get(videoId);
+        return videoIdToDetails.get(videoId).name;
     }
     console.log(`Attempting to fetch video details...`);
     const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${apiKey}`);
@@ -224,14 +153,13 @@ async function getVideoName(videoId){
     }
 }
 
-
 async function getChannels(channelName){
     if(!channelName){
         console.log(`Channel name invalid`);
         return;
     }
     console.log(`Attempting to fetch channel ID...`);
-    const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${channelName}&type=channel&fields=items%2Fsnippet%2FchannelId&key=${apiKey}`);
+    const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${channelName}&type=channel&fields=items/snippet/channelId&key=${apiKey}`);
     try{
         //document.getElementById("debug").innerHTML = JSON.stringify(jsonResponse);
         if(jsonResponse.items.length <= 0){
@@ -272,7 +200,7 @@ async function getPlaylistId(){
         } else{
             var playlistId = jsonResponse.items[0].contentDetails.relatedPlaylists.uploads;
             console.log(`Playlist ID = ${playlistId}`);
-            getVideoIds(playlistId);
+            getVideoIdsAndInitializeMap(playlistId);
         }
     }
     catch (error) {
@@ -281,7 +209,7 @@ async function getPlaylistId(){
 }
 
 //get all videoIds 
-async function getVideoIds(playlistId) {
+async function getVideoIdsAndInitializeMap(playlistId) {
     var pageToken = "";
     console.log(`Attempting to fetch videoIds of uploads...`);
     while(true){ //we will break out once we have all the videos - need loop for pageTokens
@@ -290,8 +218,13 @@ async function getVideoIds(playlistId) {
         try{ //store all videoIds (put it in the map, map it to "");
             if(jsonResponse.items.length <= 0){
                 break;
-            } else{ //store videoIds
-                jsonResponse.items.forEach(element => videoIdToCaptions.set(element.contentDetails.videoId, ""));
+            } else{ //store videoIds and initialize the map
+                jsonResponse.items.forEach(element => videoIdToDetails.set(element.contentDetails.videoId, {
+                    name: null,
+                    blurb: null,
+                    time: null,
+                    captions: []
+                }));
                 
                 //get next page token
                 var nextPageToken = jsonResponse.nextPageToken;
@@ -313,49 +246,120 @@ async function getVideoIds(playlistId) {
     
 //grab all captions for every video in the stored channel
 async function getCaptions(){
-    var videoIds = Array.from(videoIdToCaptions.keys());
+    var videoIds = Array.from(videoIdToDetails.keys());
     console.log(videoIds);
     console.log(`Attempting to fetch captions for each videoId asynchronously...`);
     //get captions
     var asyncCaptionFx = videoIds.map(elem => async () => {
         //get the caption and put it in the map
         console.log(`creating async function for ${elem}`);
-        videoIdToCaptions.set(elem, await getCaptionFromURL(`http://video.google.com/timedtext?lang=en&v=${elem}`));
+        var captions = await getCaptionFromURL(`http://video.google.com/timedtext?lang=en&v=${elem}`);
+        videoIdToDetails.get(videoId).captions = captions;
     });
     var asyncCaptionFx = asyncCaptionFx.map(fx => fx()); //start the functions
 
     await Promise.all(asyncCaptionFx); //wait for all promises to be fulfilled
     console.log(`Done fetching all captions`);
-    videoIdToCaptions.forEach((value, key, videoIdToCaptions) => console.log(`value = ${value}, key=${key}`)); //log all pairs
 }
 
-
-//should return the captions as a string
+//returns captions as an array of captionObjects
 async function getCaptionFromURL(url){
     console.log(`Attempting to fetch captions at ${url}...`);
     try{
         const xmlDoc = await fetchXMLResponse(url);
         //everything is in a <text> tag 
         let textList = xmlDoc.getElementsByTagName("text");
-        let text = "";
+        let text = [];
+        
+        let cumulativeMatchIndex = -1;
         for(let i = 0; i < textList.length; i++){
-            text += textList[i].childNodes[0].nodeValue + " ";
+            let caption = htmlDecode(textList[i].childNodes[0].nodeValue + " ");
+            let captionAlphaNumeric = toAlphaNumeric(caption);
+            cumulativeMatchIndex += captionAlphaNumeric.length;
+            let startTime = textList[i].getAttribute('start');
+            text.push({caption: caption,
+                        captionAlphaNumeric: captionAlphaNumeric,
+                         startTime: startTime,
+                         lastMatchIndex: cumulativeMatchIndex});
         }
-        //note: text will be stored along with special characters like &#39; 
-        //      input text will need to keep this in mind
-        console.log(`Text is ${text.length} characters`);
-        return text.toLowerCase();
+        console.log(text);
+        return text
     }
     catch (error) {
         alert(error);
     }
 }
-
   
+function htmlDecode(input) {
+    var doc = new DOMParser().parseFromString(input, "text/html");
+    return doc.documentElement.textContent;
+}
+
+function toAlphaNumeric(str){
+    return str.toLowerCase().replace(/[\n\r]+/g, " ").replace(/[^a-z0-9 ]+/g, "").replace(/\s+/g," ").trim() + " ";
+}
+
+
 //function returns true if there is a match, false if no match
-function boyerMoore(pattern, text, videoId){
+function boyerMoore(pattern, captionObjects, videoId){
     console.log(`Attempting to discover match for pattern ${pattern}`);
     const jumpTable = new Map(); 
+    const alphaNumericPattern = toAlphaNumeric(pattern);
+
+    updateJumpTable(jumpTable, alphaNumericPattern);
+
+    let text = "";
+    captionObjects.forEach(element => text += element.captionAlphaNumeric);
+
+    let textIdx = alphaNumericPattern.length -1; 
+    let patternIdx = textIdx;
+    let firstTextIdx = 0;
+    let lastTextIdx = textIdx; //keeps track of the furthest index in the text 
+
+    let range = [0, 0];
+    updateRange(range, captionObjects, firstTextIdx, lastTextIdx);
+
+    while(textIdx <= text.length - 1){ 
+        if(alphaNumericPattern[patternIdx] === text[textIdx]){
+            if(patternIdx === 0){ //matched the full pattern
+                console.log(`Match found!`);
+                var margin = 1;
+                var blurbText = "";
+                var leftIdx = range[0] - margin >= 0 ? range[0] - margin : 0;
+                var rightIdx = range[1] + margin < captionObjects.length ? range[1] + margin : captionObjects.length - 1;
+
+                for(let blurbIdx = leftIdx; blurbIdx <= rightIdx; blurbIdx++){
+                    let captionSegment = captionObjects[blurbIdx].caption; 
+                    blurbText += captionSegment + " ";
+                }
+
+                var time = Math.trunc(captionObjects[range[0]].startTime); 
+
+                Object.assign(videoIdToDetails.get(videoId), {blurb: blurbText, time: time});
+
+                return true;
+            } else{ //look at the rest of the elements to determine full match
+                textIdx--;
+                patternIdx--;
+            }
+        } else{
+            let incr = jumpTable.get(text[textIdx]);
+            if(!incr){ //if text[i] isnt in the pattern then it is undefined in map
+                incr = alphaNumericPattern.length;
+            }
+
+            firstTextIdx += incr;
+            lastTextIdx += incr;
+            textIdx = lastTextIdx;
+            patternIdx = alphaNumericPattern.length - 1; //reset to end for next round of comparisons
+            updateRange(range, captionObjects, firstTextIdx, lastTextIdx);
+        }
+    }
+    console.log(`No match found.`);
+    return false;
+}
+
+function updateJumpTable(jumpTable, pattern){
     let distance = 1;
     for(let k = pattern.length - 2; k >= 0; k--){
         if(jumpTable.has(pattern[k]) && distance < jumpTable.get(pattern[k])){ //update distances
@@ -365,58 +369,19 @@ function boyerMoore(pattern, text, videoId){
         }
         distance++;
     }
-    let i = pattern.length -1; 
-    let j = i;
-    let last = i; //keeps track of the furthest index in the text 
-    while(i <= text.length - 1){ 
-        if(pattern[j] === text[i]){
-            if(j === 0){ //matched the full pattern
-                console.log(`Match found!`);
-                var margin = 60;
-                var leftIdx = 0; 
-                var rightIdx = text.length;
-                if(last + margin < text.length){
-                    rightIdx = last + margin;
-                    while(rightIdx < text.length){
-                        if(text[rightIdx] === " "){
-                            break;
-                        }
-                        rightIdx++;
-                    }
-                } 
-                if(last-pattern.length - margin >= 0){
-                    leftIdx = last-pattern.length-margin;
-                    while(leftIdx >= 0){
-                        if(text[leftIdx] === " "){
-                            break;
-                        }
-                        leftIdx--;
-                    }
-                }
-                var boldLeftIdx = last - pattern.length;
-                var boldRightIdx = last;
-                var lastIdx = text.length - 1;
-                console.log(`Adding ${videoId}, ${leftIdx}, ${rightIdx} to map`);
-                videoIdToMatchIdx.set(videoId, {left: leftIdx, 
-                                                right: rightIdx,
-                                                boldLeft: boldLeftIdx,
-                                                boldRight: boldRightIdx,
-                                                lastIdx: lastIdx});
-                return true;
-            } else{ //look at the rest of the elements to determine full match
-                i--;
-                j--;
-            }
-        } else{
-            let incr = jumpTable.get(text[i]);
-            if(!incr){ //if text[i] isnt in the pattern then it is undefined in map
-                incr = pattern.length;
-            }
-            i = last + incr; //jump ahead as far as possible according to jump table
-            j = pattern.length - 1; //reset to end for next round of comparisons
-            last = i; //update position of the last pointer 
+}
+
+function updateRange(range, captionObjects, firstTextIdx, lastTextIdx){
+     for(let captionIdx = range[1]; captionIdx < captionObjects.length; captionIdx++){
+        if(lastTextIdx <= captionObjects[captionIdx].lastMatchIndex){
+            range[1] = captionIdx;
+            break;
         }
     }
-    console.log(`No match found.`);
-    return false;
+    for(let captionIdx = range[0]; captionIdx < captionObjects.length; captionIdx++){
+        if(firstTextIdx <= captionObjects[captionIdx].lastMatchIndex){
+            range[0] = captionIdx;
+            break;
+        }
+    }
 }
