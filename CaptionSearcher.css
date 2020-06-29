@@ -1,0 +1,53 @@
+body{
+    font-family: 'Roboto', sans-serif;
+    margin-left: 25px;
+    margin-right: 25px;
+    background-color: #ffffff;
+}
+
+#interactive {
+    padding: 25px;
+    padding-top: 1px;
+    border-radius: 20px;
+}
+
+input[type=submit], input[type="text"]{
+    font-family: 'Roboto', sans-serif;
+}
+
+input[type=submit]{
+    color: #212121;
+}
+
+input[type="text"]{
+    color: #606060;
+}
+
+#interactive{
+    background-color: #f9f9f9;
+}
+
+#debug{
+    color: #ff0000;
+}
+
+
+p, h1, h2, h3, h4, h5, h6, ul, dd, dt {
+    color: #212121;
+}
+
+h2, h3{
+    font-size: 22px;
+}
+
+#channelInfo{
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.channelElem{
+    padding: 10px;
+    margin: 0px;
+    text-align: center;
+    flex: 1;
+}

@@ -8,21 +8,68 @@ the user's inputted quote.
 */
 
 var videoIdToDetails = new Map(); //name, blurb, time, captions[]
-var channelId;
-
+var channelDetails; //id, name, thumbnail, subscribers, videos
+var counter = 0;
 
 window.onload = function(){
-    document.getElementById("channelForm").onsubmit = updateChannel;  
+    document.getElementById("channelForm").onsubmit = updateChannel;
     document.getElementById("captionForm").onsubmit = submitQuote;
 }
 
+function appendChannelChoice(channelDetailsChoice){
+    var channelDiv = document.getElementById("channelInfo");
+
+    var channelElement = document.createElement("div");
+    channelElement.className = "channelElem";
+
+    var id = channelDetailsChoice.id;
+    var channelName = channelDetailsChoice.name;
+    var thumbnail = `<img src="${channelDetailsChoice.thumbnail}"/>`
+    var subscriberCount = `Subscribers: ${channelDetailsChoice.subscribers}`;
+    var videoCount = `Videos: ${channelDetailsChoice.videos}`;
+
+
+    var button = document.createElement("button");
+    button.innerHTML = thumbnail;
+    button.addEventListener("click", chooseChannel);
+    channelElement.appendChild(button);
+
+    createAndAppendElement("p", channelName, channelElement);
+    createAndAppendElement("p", subscriberCount, channelElement);
+    createAndAppendElement("p", videoCount, channelElement);
+    channelElement.id = id;
+
+    channelDiv.appendChild(channelElement);
+}
+
+function createAndAppendElement(type, inner, appendTo){
+    var elem = document.createElement(type);
+    elem.innerHTML = inner;
+    appendTo.appendChild(elem);
+}
+
+function chooseChannel(){
+    var channelDiv = document.getElementById("channelInfo");
+    var channelElement = this.parentElement;
+    var childNodes = channelElement.childNodes;
+
+    channelDetails = {
+        channelId: channelElement.id,
+        channelName: childNodes[1].innerHTML,
+        thumbnail: childNodes[0].innerHTML,
+        subscriberCount: childNodes[2].innerHTML,
+        videoCount: childNodes[3].innerHTML
+    };
+    
+    channelDiv.innerHTML = "";
+    createAndAppendElement("p", channelDetails.channelId, channelDiv);
+}
 
 function updateChannel(){
     var channelName = document.getElementById("channelText").value;
     if(channelName){
         console.log("Channel name: " + channelName);
-        document.getElementById("channelNameText").innerHTML = channelName;
-        getChannels(channelName);
+        getAndAppendChannels(channelName);
     } else{
         alert("Channel name not set");
     }
@@ -30,7 +77,67 @@ function updateChannel(){
     return false; //don't submit, don't refresh page
 }
 
+
+async function getAndAppendChannels(channelName){
+    if(!channelName){
+        console.log(`Channel name invalid`);
+        return;
+    }
+    console.log(`Attempting to fetch channel ID...`);
+    const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${channelName}&type=channel&fields=items%2Fsnippet(channelId%2Ctitle%2Cthumbnails%2Fdefault%2Furl)&key=${apiKey}`);
+
+    try{
+        //document.getElementById("debug").innerHTML = JSON.stringify(jsonResponse);
+        if(jsonResponse.items.length <= 0){
+            alert("No channels found");
+            return;
+        } else{
+            //we can change this to allow users to select from the list of channels
+            for(let i = 0; i < jsonResponse.items.length; i++){
+                console.log(JSON.stringify(jsonResponse));
+                let channel = {
+                    id: jsonResponse.items[i].snippet.channelId,
+                    name: jsonResponse.items[i].snippet.title,
+                    thumbnail: jsonResponse.items[i].snippet.thumbnails.default.url,
+                    subscribers: null,
+                    videos: null
+                };
+                await getChannelStatistics(channel, channel.id);
+                appendChannelChoice(channel);
+            }
+            //channelId = jsonResponse.items[0].snippet.channelId;
+            //console.log(`Channel ID = ${channelId}`);
+            //getPlaylistId(); //now fetch everything else 
+        }
+        //if it is not valid (no channels), then it returns {"items":[]}
+    }
+    catch (error) {
+        alert(error);
+    }
+}
+
+async function getChannelStatistics(channel, channelId){
+    const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${channelId}&fields=items%2Fstatistics(subscriberCount%2CvideoCount)&key=${apiKey}`);
+    try{
+        if(jsonResponse.items.length <= 0){
+            alert("No channels found");
+            return;
+        } else{
+            console.log(JSON.stringify(jsonResponse));
+            channel.subscribers = jsonResponse.items[0].statistics.subscriberCount,
+            channel.videos = jsonResponse.items[0].statistics.videoCount
+        }
+    }
+    catch (error) {
+        alert(error);
+    }
+}
+
 function submitQuote(){
+    if(!channelId){
+        alert("Must enter a channel name first.");
+        return;
+    }
     var quote = document.getElementById("quoteText").value;
     if(quote){
         document.getElementById("resultsList").innerHTML = "Processing results..."; //clear all nodes to make room for new query
@@ -78,10 +185,8 @@ async function findAndPostVideoDetails(matches){
             console.log(`The name for ${videoId} is ${videoIdToDetails.get(videoId).name}`)
             document.getElementById("resultsList").appendChild(term);
 
-            var captionResult = document.createElement("dd");
-            var obj = videoIdToDetails.get(videoId).blurb;
-            captionResult.innerHTML = obj.blurb;
-            document.getElementById("resultsList").appendChild(captionResult);
+            var blurb = videoIdToDetails.get(videoId).blurb;
+            createAndAppendElement("dd", blurb, document.getElementById("resultsList"));
 
             var time = obj.time;
             //var link = `https://youtube.com/watch?v=${videoId}`;
@@ -137,8 +242,7 @@ async function getVideoName(videoId){
         return videoIdToDetails.get(videoId).name;
     }
     console.log(`Attempting to fetch video details...`);
-    const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${apiKey}`);
-
+    const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&fields=items%2Fsnippet%2Ftitle&key=${apiKey}`);
     try{
         //document.getElementById("debug").innerHTML = JSON.stringify(jsonResponse);
         //console.log(JSON.stringify(jsonResponse));
@@ -153,36 +257,6 @@ async function getVideoName(videoId){
     }
 }
 
-async function getChannels(channelName){
-    if(!channelName){
-        console.log(`Channel name invalid`);
-        return;
-    }
-    console.log(`Attempting to fetch channel ID...`);
-    const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${channelName}&type=channel&fields=items/snippet/channelId&key=${apiKey}`);
-    try{
-        //document.getElementById("debug").innerHTML = JSON.stringify(jsonResponse);
-        if(jsonResponse.items.length <= 0){
-            alert("No channels found");
-            return;
-        } else{
-            //we can change this to allow users to select from the list of channels
-            channelId = jsonResponse.items[0].snippet.channelId;
-            console.log(`Channel ID = ${channelId}`);
-            getPlaylistId(); //now fetch everything else 
-        }
-        //if it is not valid (no channels), then it returns {"items":[]}
-    }
-    catch (error) {
-        alert(error);
-    }
-}
-
-function jsonHasItems(jsonResponse){
-    if(jsonResponse.items.length > 0){
-        return true;
-    }
-}
 
 //this function will grab playlist id
 async function getPlaylistId(){
@@ -191,7 +265,7 @@ async function getPlaylistId(){
         return;
     }
     console.log(`Attempting to fetch playlistId of uploads...`);
-    const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/channels?id=${channelId}&key=${apiKey}&part=contentDetails`);
+    const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}&fields=items%2FcontentDetails%2FrelatedPlaylists%2Fuploads&key=${apiKey}`);
     try{ //store the playlistId full of uploads
         document.getElementById("debug").innerHTML = JSON.stringify(jsonResponse);
         if(jsonResponse.items.length <= 0){
