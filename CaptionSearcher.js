@@ -13,59 +13,10 @@ var counter = 0;
 
 window.onload = function(){
     document.getElementById("channelForm").onsubmit = updateChannel;
-    document.getElementById("captionForm").onsubmit = submitQuote;
-}
-
-function appendChannelChoice(channelDetailsChoice){
-    var channelDiv = document.getElementById("channelInfo");
-
-    var channelElement = document.createElement("div");
-    channelElement.className = "channelElem";
-
-    var id = channelDetailsChoice.id;
-    var channelName = channelDetailsChoice.name;
-    var thumbnail = `<img src="${channelDetailsChoice.thumbnail}"/>`
-    var subscriberCount = `Subscribers: ${channelDetailsChoice.subscribers}`;
-    var videoCount = `Videos: ${channelDetailsChoice.videos}`;
-
-
-    var button = document.createElement("button");
-    button.innerHTML = thumbnail;
-    button.addEventListener("click", chooseChannel);
-    channelElement.appendChild(button);
-
-    createAndAppendElement("p", channelName, channelElement);
-    createAndAppendElement("p", subscriberCount, channelElement);
-    createAndAppendElement("p", videoCount, channelElement);
-    channelElement.id = id;
-
-    channelDiv.appendChild(channelElement);
-}
-
-function createAndAppendElement(type, inner, appendTo){
-    var elem = document.createElement(type);
-    elem.innerHTML = inner;
-    appendTo.appendChild(elem);
-}
-
-function chooseChannel(){
-    var channelDiv = document.getElementById("channelInfo");
-    var channelElement = this.parentElement;
-    var childNodes = channelElement.childNodes;
-
-    channelDetails = {
-        channelId: channelElement.id,
-        channelName: childNodes[1].innerHTML,
-        thumbnail: childNodes[0].innerHTML,
-        subscriberCount: childNodes[2].innerHTML,
-        videoCount: childNodes[3].innerHTML
-    };
-    
-    channelDiv.innerHTML = "";
-    createAndAppendElement("p", channelDetails.channelId, channelDiv);
 }
 
 function updateChannel(){
+    document.getElementById("channelInfo").innerHTML = "";
     var channelName = document.getElementById("channelText").value;
     if(channelName){
         console.log("Channel name: " + channelName);
@@ -77,7 +28,6 @@ function updateChannel(){
     return false; //don't submit, don't refresh page
 }
 
-
 async function getAndAppendChannels(channelName){
     if(!channelName){
         console.log(`Channel name invalid`);
@@ -87,7 +37,6 @@ async function getAndAppendChannels(channelName){
     const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${channelName}&type=channel&fields=items%2Fsnippet(channelId%2Ctitle%2Cthumbnails%2Fdefault%2Furl)&key=${apiKey}`);
 
     try{
-        //document.getElementById("debug").innerHTML = JSON.stringify(jsonResponse);
         if(jsonResponse.items.length <= 0){
             alert("No channels found");
             return;
@@ -116,6 +65,22 @@ async function getAndAppendChannels(channelName){
     }
 }
 
+async function fetchJSONResponse(url){
+    try{
+        const response = await fetch(url);
+        console.log(`Done waiting for response`);
+        if(response.ok){
+            let jsonResponse = await response.json();
+            return jsonResponse;
+        } else{
+            throw new Error('Request Failed!');
+        }
+    }
+    catch (error) {
+        alert(error);
+    }
+}
+
 async function getChannelStatistics(channel, channelId){
     const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${channelId}&fields=items%2Fstatistics(subscriberCount%2CvideoCount)&key=${apiKey}`);
     try{
@@ -133,141 +98,74 @@ async function getChannelStatistics(channel, channelId){
     }
 }
 
-function submitQuote(){
-    if(!channelId){
-        alert("Must enter a channel name first.");
-        return;
-    }
-    var quote = document.getElementById("quoteText").value;
-    if(quote){
-        document.getElementById("resultsList").innerHTML = "Processing results..."; //clear all nodes to make room for new query
-        document.getElementById("captionInputText").innerHTML = quote;
-        quote = quote.toLowerCase();
-        var videoIds = Array.from(videoIdToDetails.keys());
-        console.log(`Attempting to pattern match ${quote}...`);
-        var matchMap = new Map();
-        videoIds.forEach(id => {
-            matchMap.set(id, boyerMoore(quote, videoIdToDetails.get(id).captions, id));
-        })
-        console.log(`Done pattern matching`);
-        var matches = Array.from(matchMap.keys());
-        matches = matches.filter(id => matchMap.get(id)); //all the videoIds that returned TRUE
-        console.log(matches);
-        //document.getElementById("debug").innerHTML = matches;
-        document.getElementById("resultsList").innerHTML = ""; //clear feedback string 
-        findAndPostVideoDetails(matches);
+function appendChannelChoice(channelDetailsChoice){
+    var channelDiv = document.getElementById("channelInfo");
 
-    } else{
-        alert("Please enter a quote");
-    }
-    return false; //again currently necessary to not refresh page 
+    var channelElement = document.createElement("div");
+    channelElement.className = "channelElem";
+
+    var id = channelDetailsChoice.id;
+    var channelName = channelDetailsChoice.name;
+    var thumbnail = `<img src="${channelDetailsChoice.thumbnail}"/>`
+    var subscriberCount = `Subscribers: ${channelDetailsChoice.subscribers}`;
+    var videoCount = `Videos: ${channelDetailsChoice.videos}`;
+
+
+    var button = document.createElement("button");
+    button.innerHTML = thumbnail;
+    button.addEventListener("click", chooseChannel);
+    channelElement.appendChild(button);
+
+    createAndAppendElement("p", channelName, channelElement);
+    createAndAppendElement("p", subscriberCount, channelElement);
+    createAndAppendElement("p", videoCount, channelElement);
+    channelElement.id = id;
+
+    channelDiv.appendChild(channelElement);
 }
 
-async function findAndPostVideoDetails(matches){
-    const storeName = async videoId => {
-        return new Promise(resolve => {
-            var name = getVideoName(videoId);
-            resolve(name);
-        }).then(name => {
-            videoIdToDetails.get(videoId).name = name;
-            return videoId;
-        });
-    }
+async function chooseChannel(){
+    var channelDiv = document.getElementById("channelInfo");
+    var channelElement = this.parentElement;
+    var childNodes = channelElement.childNodes;
 
-    var matchFunctions = matches.map(storeName);
-    var results = Promise.all(matchFunctions);
-    results.then(videoIds => {
-        console.log(videoIds);
-        videoIds.forEach(videoId => {
-            console.log(`Adding link to video ${videoId}`);
-            var term = document.createElement("dt");
-            term.appendChild(document.createTextNode(videoIdToDetails.get(videoId).name));
-            console.log(`The name for ${videoId} is ${videoIdToDetails.get(videoId).name}`)
-            document.getElementById("resultsList").appendChild(term);
-
-            var blurb = videoIdToDetails.get(videoId).blurb;
-            createAndAppendElement("dd", blurb, document.getElementById("resultsList"));
-
-            var time = obj.time;
-            //var link = `https://youtube.com/watch?v=${videoId}`;
-            //var link = `https://youtu.be/${videoId}?t=${time}`;
-            var link = `https://www.youtube.com/embed/${videoId}`;
-            var embed = `<iframe width="560" height="315" src="${link}?start=${time}" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
-            captionResult.insertAdjacentHTML('beforebegin', embed);
-
-        })
-    });
+    channelDetails = {
+        channelId: channelElement.id,
+        channelName: childNodes[1].innerHTML,
+        thumbnail: childNodes[0].innerHTML,
+        subscriberCount: childNodes[2].innerHTML,
+        videoCount: childNodes[3].innerHTML
+    };
+    
+    channelDiv.innerHTML = "";
+    var channelInfo = `${channelDetails.channelName}<br>Subscribers: ${channelDetails.subscriberCount}<br>Videos: ${channelDetails.videoCount}`
+    createAndAppendElement("p", channelInfo, channelDiv);
+    removeChannelInputField();
+    await getPlaylistId();
 }
 
-async function fetchJSONResponse(url){
-    try{
-        const response = await fetch(url);
-        console.log(`Done waiting for response`);
-        if(response.ok){
-            let jsonResponse = await response.json();
-            return jsonResponse;
-        } else{
-            let jsonResponse = await response.json(); 
-            document.getElementById("debug").innerHTML = JSON.stringify(jsonResponse);
-            throw new Error('Request Failed!');
-        }
-    }
-    catch (error) {
-        alert(error);
-    }
+function createAndAppendElement(type, inner, appendTo){
+    var elem = document.createElement(type);
+    elem.innerHTML = inner;
+    appendTo.appendChild(elem);
 }
 
-async function fetchXMLResponse(url){    
-    try{
-        const response = await fetch(url);
-        console.log(`Done waiting for response`);
-        if(response.ok){
-            const xmlResponse = await response.text();
-            let parser = new DOMParser();
-            return parser.parseFromString(xmlResponse, "text/xml");
-        }
-        throw new Error('Request Failed!');
-    }
-    catch (error) {
-        alert(error);
-    }
-}
+function removeChannelInputField(){
+    var inputField = document.getElementById("channelForm");
+    var channelDiv = document.getElementById("channel");
 
-async function getVideoName(videoId){
-    if(!videoId){
-        console.log(`Video ID invalid`);
-        return;
-    } else if(videoIdToDetails.get(videoId).name){
-        console.log(`Video name already found`);
-        return videoIdToDetails.get(videoId).name;
-    }
-    console.log(`Attempting to fetch video details...`);
-    const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&fields=items%2Fsnippet%2Ftitle&key=${apiKey}`);
-    try{
-        //document.getElementById("debug").innerHTML = JSON.stringify(jsonResponse);
-        //console.log(JSON.stringify(jsonResponse));
-        if(jsonResponse.items.length > 0){
-            console.log(jsonResponse.items[0].snippet.title);
-            return jsonResponse.items[0].snippet.title;
-        }
-        return jsonResponse.title;
-    }
-    catch (error) {
-        alert(error);
-    }
+    channelDiv.removeChild(inputField);
 }
-
 
 //this function will grab playlist id
 async function getPlaylistId(){
-    if(!channelId){
+    if(!channelDetails.channelId){
         console.log(`Invalid channel ID`);
         return;
     }
     console.log(`Attempting to fetch playlistId of uploads...`);
-    const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}&fields=items%2FcontentDetails%2FrelatedPlaylists%2Fuploads&key=${apiKey}`);
+    const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelDetails.channelId}&fields=items%2FcontentDetails%2FrelatedPlaylists%2Fuploads&key=${apiKey}`);
     try{ //store the playlistId full of uploads
-        document.getElementById("debug").innerHTML = JSON.stringify(jsonResponse);
         if(jsonResponse.items.length <= 0){
             alert("No playlists found");
             return;
@@ -324,16 +222,17 @@ async function getCaptions(){
     console.log(videoIds);
     console.log(`Attempting to fetch captions for each videoId asynchronously...`);
     //get captions
-    var asyncCaptionFx = videoIds.map(elem => async () => {
+    var asyncCaptionFx = videoIds.map(videoId => async () => {
         //get the caption and put it in the map
-        console.log(`creating async function for ${elem}`);
-        var captions = await getCaptionFromURL(`http://video.google.com/timedtext?lang=en&v=${elem}`);
+        console.log(`creating async function for ${videoId}`);
+        var captions = await getCaptionFromURL(`http://video.google.com/timedtext?lang=en&v=${videoId}`);
         videoIdToDetails.get(videoId).captions = captions;
     });
     var asyncCaptionFx = asyncCaptionFx.map(fx => fx()); //start the functions
 
     await Promise.all(asyncCaptionFx); //wait for all promises to be fulfilled
     console.log(`Done fetching all captions`);
+    createQuoteInputField();
 }
 
 //returns captions as an array of captionObjects
@@ -363,6 +262,22 @@ async function getCaptionFromURL(url){
         alert(error);
     }
 }
+
+async function fetchXMLResponse(url){    
+    try{
+        const response = await fetch(url);
+        console.log(`Done waiting for response`);
+        if(response.ok){
+            const xmlResponse = await response.text();
+            let parser = new DOMParser();
+            return parser.parseFromString(xmlResponse, "text/xml");
+        }
+        throw new Error('Request Failed!');
+    }
+    catch (error) {
+        alert(error);
+    }
+}
   
 function htmlDecode(input) {
     var doc = new DOMParser().parseFromString(input, "text/html");
@@ -373,6 +288,72 @@ function toAlphaNumeric(str){
     return str.toLowerCase().replace(/[\n\r]+/g, " ").replace(/[^a-z0-9 ]+/g, "").replace(/\s+/g," ").trim() + " ";
 }
 
+function createQuoteInputField(){
+    var captionDiv = document.createElement("div");
+    captionDiv.id = "caption";
+    createAndAppendElement("h2", "Caption", captionDiv);
+
+    var captionFormInner = `Enter quote: <input type="text" placeholder="Caption here" size="40" id="quoteText">
+    <input type="submit">`
+    var captionForm = document.createElement("form");
+    captionForm.id = "captionForm";
+    captionForm.innerHTML = captionFormInner;
+    captionForm.onsubmit = submitQuote;
+    captionDiv.appendChild(captionForm);
+
+    var captionInfo = document.createElement("div");
+    captionInfo.id = "captionInfo";
+    captionDiv.appendChild(captionInfo);    
+
+    document.getElementById("interactive").appendChild(captionDiv);
+}
+
+function submitQuote(){
+    if(!channelDetails.channelId){
+        alert("Must enter a channel name first.");
+        return;
+    }
+    var quote = document.getElementById("quoteText").value;
+    if(quote){
+        document.getElementById("captionInfo").innerHTML = quote;
+        quote = quote.toLowerCase();
+        createResultsField();
+        patternMatch(quote);
+    } else{
+        alert("Please enter a quote");
+    }
+    return false; //again currently necessary to not refresh page 
+}
+
+function createResultsField(){
+    if(document.getElementById("results")){
+        return;
+    }
+    var resultsDiv = document.createElement("div");
+    resultsDiv.id = "results";
+    createAndAppendElement("h3", "Results", resultsDiv);
+
+    var resultsList = document.createElement("dl");
+    resultsList.id = "resultsList";
+    resultsDiv.appendChild(resultsList); 
+    
+    document.getElementById("interactive").appendChild(resultsDiv);
+}
+
+async function patternMatch(quote){
+    var videoIds = Array.from(videoIdToDetails.keys());
+    console.log(`Attempting to pattern match ${quote}...`);
+    var matchMap = new Map();
+    videoIds.forEach(id => {
+        matchMap.set(id, boyerMoore(quote, videoIdToDetails.get(id).captions, id));
+    })
+    console.log(`Done pattern matching`);
+    var matches = Array.from(matchMap.keys());
+    matches = matches.filter(id => matchMap.get(id)); //all the videoIds that returned TRUE
+    console.log(matches);
+    document.getElementById("resultsList").innerHTML = ""; //clear feedback string 
+    findAndPostVideoDetails(matches);
+}
 
 //function returns true if there is a match, false if no match
 function boyerMoore(pattern, captionObjects, videoId){
@@ -457,5 +438,62 @@ function updateRange(range, captionObjects, firstTextIdx, lastTextIdx){
             range[0] = captionIdx;
             break;
         }
+    }
+}
+
+async function findAndPostVideoDetails(matches){
+    const storeName = async videoId => {
+        return new Promise(resolve => {
+            var name = getVideoName(videoId);
+            resolve(name);
+        }).then(name => {
+            videoIdToDetails.get(videoId).name = name;
+            return videoId;
+        });
+    }
+
+    var matchFunctions = matches.map(storeName);
+    var results = Promise.all(matchFunctions);
+    results.then(videoIds => {
+        console.log(videoIds);
+        videoIds.forEach(videoId => {
+            console.log(`Adding link to video ${videoId}`);
+            var term = document.createElement("dt");
+            term.appendChild(document.createTextNode(videoIdToDetails.get(videoId).name));
+            console.log(`The name for ${videoId} is ${videoIdToDetails.get(videoId).name}`)
+            document.getElementById("resultsList").appendChild(term);
+
+            var blurb = videoIdToDetails.get(videoId).blurb;
+            createAndAppendElement("dd", blurb, document.getElementById("resultsList"));
+
+            var time = videoIdToDetails.get(videoId).time;
+            var link = `https://www.youtube.com/embed/${videoId}`;
+            var embed = `<iframe width="560" height="315" src="${link}?start=${time}" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+            term.insertAdjacentHTML('beforebegin', embed);
+
+        })
+    });
+}
+
+async function getVideoName(videoId){
+    if(!videoId){
+        console.log(`Video ID invalid`);
+        return;
+    } else if(videoIdToDetails.get(videoId).name){
+        console.log(`Video name already found`);
+        return videoIdToDetails.get(videoId).name;
+    }
+    console.log(`Attempting to fetch video details...`);
+    const jsonResponse = await fetchJSONResponse(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&fields=items%2Fsnippet%2Ftitle&key=${apiKey}`);
+    try{
+        //console.log(JSON.stringify(jsonResponse));
+        if(jsonResponse.items.length > 0){
+            console.log(jsonResponse.items[0].snippet.title);
+            return jsonResponse.items[0].snippet.title;
+        }
+        return jsonResponse.title;
+    }
+    catch (error) {
+        alert(error);
     }
 }
